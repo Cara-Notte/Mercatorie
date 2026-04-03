@@ -6,9 +6,10 @@ from src.training.feature_engineering import FEATURE_COLUMNS, build_base_feature
 
 
 def build_inference_features(raw_input: pd.DataFrame) -> pd.DataFrame:
-    """Build inference features from feature-ready raw input data.
+    """Build inference features from feature-ready tabular input.
 
-    Expected upstream columns include precomputed lag/rolling/pct-change fields.
+    Current contract does not accept raw time-series-only payloads; upstream processing
+    must already provide lag/rolling/pct-change columns required by build_base_features.
     """
     features_df = build_base_features(raw_input)
     missing = [c for c in FEATURE_COLUMNS if c not in features_df.columns]

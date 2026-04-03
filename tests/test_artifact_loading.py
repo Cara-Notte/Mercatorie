@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.common.config import metadata_artifact_path, model_artifact_path
+from src.common.config import INPUT_CONTRACT, metadata_artifact_path, model_artifact_path
 from src.inference.predict import InferenceService
 
 
@@ -17,12 +17,14 @@ class _FakePipeline:
     named_steps = {"model": _FakeModelStep()}
 
 
-def _write_metadata(path: Path, horizon: int, class_names: list[str] | None = None) -> None:
+def _write_metadata(path: Path, horizon: int, class_names: list[str] | None = None, input_contract: str = INPUT_CONTRACT) -> None:
     payload = {
         "engineered_feature_columns": ["commodity"],
         "class_names": class_names or ["Deflation", "Stable", "Inflation"],
         "horizon": horizon,
-        "model_version": "1.1.0",
+        "model_version": "1.2.0",
+        "input_contract": input_contract,
+        "artifact_name": f"inflation_classifier_{horizon}d.joblib",
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -51,4 +53,34 @@ def test_metadata_model_class_alignment_validation(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("src.inference.predict.joblib.load", lambda _: _FakePipeline())
 
     with pytest.raises(ValueError, match="Metadata/model class mismatch"):
+        InferenceService(horizon=7, model_path=tmp_path / "model.joblib", metadata_path=metadata)
+
+
+def test_metadata_contract_consistency(monkeypatch, tmp_path: Path):
+    metadata = tmp_path / "metadata.json"
+    _write_metadata(metadata, horizon=7, input_contract=INPUT_CONTRACT)
+
+    monkeypatch.setattr("src.inference.predict.joblib.load", lambda _: _FakePipeline())
+    service = InferenceService(horizon=7, model_path=tmp_path / "model.joblib", metadata_path=metadata)
+
+    assert service.metadata["input_contract"] == "feature_ready_tabular"
+
+
+def test_absence_of_stale_artifact_metadata(monkeypatch, tmp_path: Path):
+    metadata = tmp_path / "metadata.json"
+    _write_metadata(metadata, horizon=7)
+
+    monkeypatch.setattr("src.inference.predict.joblib.load", lambda _: _FakePipeline())
+    service = InferenceService(horizon=7, model_path=tmp_path / "model.joblib", metadata_path=metadata)
+
+    assert "preprocessor_artifact_name" not in service.metadata
+
+
+def test_invalid_input_contract_raises(monkeypatch, tmp_path: Path):
+    metadata = tmp_path / "metadata.json"
+    _write_metadata(metadata, horizon=7, input_contract="raw_timeseries")
+
+    monkeypatch.setattr("src.inference.predict.joblib.load", lambda _: _FakePipeline())
+
+    with pytest.raises(ValueError, match="Unsupported metadata input contract"):
         InferenceService(horizon=7, model_path=tmp_path / "model.joblib", metadata_path=metadata)

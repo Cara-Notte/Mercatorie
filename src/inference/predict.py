@@ -7,7 +7,13 @@ from datetime import datetime, timezone
 import joblib
 import pandas as pd
 
-from src.common.config import CLASS_ORDER, SUPPORTED_HORIZONS, metadata_artifact_path, model_artifact_path
+from src.common.config import (
+    CLASS_ORDER,
+    INPUT_CONTRACT,
+    SUPPORTED_HORIZONS,
+    metadata_artifact_path,
+    model_artifact_path,
+)
 from src.inference.feature_builder import build_inference_features
 
 LOGGER = logging.getLogger(__name__)
@@ -43,6 +49,13 @@ class InferenceService:
                 f"Horizon mismatch: metadata has {self.metadata['horizon']}d, service initialized with {self.horizon}d"
             )
 
+        metadata_contract = self.metadata.get("input_contract")
+        if metadata_contract != INPUT_CONTRACT:
+            raise ValueError(
+                "Unsupported metadata input contract. "
+                f"Expected '{INPUT_CONTRACT}', got '{metadata_contract}'"
+            )
+
     def _validate_column_order(self, feature_df: pd.DataFrame) -> None:
         incoming = list(feature_df.columns)
         if incoming != self.expected_columns:
@@ -52,6 +65,9 @@ class InferenceService:
             )
 
     def predict(self, raw_input: pd.DataFrame) -> list[dict]:
+        if raw_input.empty:
+            raise ValueError("Inference input cannot be empty.")
+
         feature_df = build_inference_features(raw_input)
 
         missing = [col for col in self.expected_columns if col not in feature_df.columns]

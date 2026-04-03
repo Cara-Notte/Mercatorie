@@ -7,11 +7,14 @@ import streamlit as st
 
 from src.inference.predict import InferenceService
 
-st.set_page_config(page_title="Inflation Classifier", layout="centered")
-st.title("Food Inflation Classifier")
-st.caption("Inference-only app. No training logic is executed here.")
+st.set_page_config(page_title="Inflation Inference Tester", layout="centered")
+st.title("Internal Inflation Inference Tester")
+st.caption("Internal tool for validating feature-ready payloads against saved inference artifacts.")
 
-st.markdown("Provide one JSON object with feature-ready raw fields required by shared feature engineering.")
+st.markdown(
+    "Provide one JSON object with **feature-ready tabular fields**. "
+    "This tool does not fetch live data and does not run training."
+)
 
 example_payload = {
     "date": "2024-10-01",
@@ -40,7 +43,7 @@ example_payload = {
 horizon = st.selectbox("Prediction horizon", options=[7, 30], index=0)
 payload_text = st.text_area("Input JSON", value=json.dumps(example_payload, indent=2), height=340)
 
-if st.button("Predict"):
+if st.button("Run inference"):
     try:
         payload = json.loads(payload_text)
         df = pd.DataFrame([payload])

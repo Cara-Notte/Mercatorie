@@ -9,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 EPSILON = 1e-6
 
 CATEGORICAL_FEATURES = ["commodity"]
-BINARY_FEATURES = ["is_observed_source", "is_month_start", "is_month_end", "high_vol_regime"]
+BINARY_FEATURES = ["is_observed_source", "is_month_start", "is_month_end"]
 NUMERIC_FEATURES = [
     "year",
     "price_idr",
@@ -82,7 +82,7 @@ def _make_inflation_class(value: float, stable_band: float = 1.0) -> str:
 
 
 def validate_raw_columns(df: pd.DataFrame) -> None:
-    """Validate the feature-ready raw input contract.
+    """Validate the feature-ready tabular input contract.
 
     Training and inference currently require feature-ready input where upstream columns
     (lags, rolling means/std, pct changes) already exist.
@@ -93,10 +93,10 @@ def validate_raw_columns(df: pd.DataFrame) -> None:
 
 
 def build_base_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Build shared engineered features for both training and inference.
+    """Build shared deterministic features for both training and inference.
 
-    Upstream responsibility is explicit: callers must provide feature-ready raw columns
-    such as price lags, rolling statistics, and percentage-change columns.
+    This function intentionally avoids batch-relative features so single-row inference
+    is consistent with batch inference for identical input rows.
     """
     validate_raw_columns(df)
 
@@ -130,9 +130,6 @@ def build_base_features(df: pd.DataFrame) -> pd.DataFrame:
     engineered["volatility_x_momentum"] = (
         engineered["volatility_30d_pct"] * engineered["price_change_7d_pct"]
     )
-
-    q75 = engineered.groupby("commodity")["volatility_30d_pct"].transform(lambda series: series.quantile(0.75))
-    engineered["high_vol_regime"] = (engineered["volatility_30d_pct"] >= q75).astype(int)
 
     LOGGER.info("Base feature engineering complete with %s rows.", len(engineered))
     return engineered

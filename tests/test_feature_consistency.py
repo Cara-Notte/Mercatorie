@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.training.feature_engineering import attach_training_targets, build_base_features
+from src.training.feature_engineering import FEATURE_COLUMNS, attach_training_targets, build_base_features
 from src.training.train import _assert_no_target_leakage
 
 
@@ -47,3 +47,18 @@ def test_target_leakage_prevention_guard_raises_on_target_columns():
 
     with pytest.raises(ValueError, match="Target leakage detected"):
         _assert_no_target_leakage(leaked_features)
+
+
+def test_feature_set_no_longer_contains_batch_relative_high_vol_regime():
+    assert "high_vol_regime" not in FEATURE_COLUMNS
+
+
+def test_base_features_remain_consistent_when_input_row_repeated():
+    df = pd.read_csv("data/raw/pihps_food_inflation_indonesia.csv").head(1)
+    df["date"] = pd.to_datetime(df["date"])
+
+    single_features = build_base_features(df)[FEATURE_COLUMNS].iloc[0]
+    duplicated = pd.concat([df, df], ignore_index=True)
+    duplicated_features = build_base_features(duplicated)[FEATURE_COLUMNS].iloc[0]
+
+    pd.testing.assert_series_equal(single_features, duplicated_features, check_names=False)
