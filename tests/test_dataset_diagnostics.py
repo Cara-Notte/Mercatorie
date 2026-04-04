@@ -3,67 +3,61 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.dataset_diagnostics import DiagnosticsConfig, DiagnosticsThresholds, ReadinessStatus
-from src.dataset_diagnostics.diagnostics import _gap_diagnostics, run_dataset_diagnostics
+from src.dataset_diagnostics.config import DiagnosticsConfig, DiagnosticsThresholds
+from src.dataset_diagnostics.diagnostics import ReadinessStatus, _gap_diagnostics, run_dataset_diagnostics
+
+
+FEATURE_COLS = [
+    "price_lag_1d",
+    "price_lag_7d",
+    "price_lag_30d",
+    "price_change_1d_pct",
+    "price_change_7d_pct",
+    "price_change_30d_pct",
+    "rolling_mean_7d",
+    "rolling_mean_30d",
+    "rolling_std_30d",
+    "price_vs_ma30_pct",
+    "volatility_30d_pct",
+]
 
 
 def _canonical_sample() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "date": pd.to_datetime(
-                [
-                    "2026-01-01",
-                    "2026-01-02",
-                    "2026-01-03",
-                    "2026-01-06",
-                    "2026-01-07",
-                    "2026-01-01",
-                    "2026-01-02",
-                    "2026-01-03",
-                    "2026-01-04",
-                    "2026-01-06",
-                ]
-            ),
-            "commodity": ["beras"] * 5 + ["cabai_merah"] * 5,
-            "price_idr": [100, 101, 102, 103, 104, 200, 198, 205, 210, 212],
-        }
-    )
+    dates = pd.date_range("2026-01-01", periods=90, freq="D")
+    rows = []
+    for commodity, base in [("beras", 100), ("cabai_merah", 220)]:
+        for idx, d in enumerate(dates):
+            rows.append(
+                {
+                    "date": d,
+                    "commodity": commodity,
+                    "price_idr": base + idx,
+                }
+            )
+    return pd.DataFrame(rows)
+
 
 
 def _training_ready_sample() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "date": pd.to_datetime(
-                [
-                    "2026-01-01",
-                    "2026-01-02",
-                    "2026-01-03",
-                    "2026-01-06",
-                    "2026-01-07",
-                    "2026-01-01",
-                    "2026-01-02",
-                    "2026-01-03",
-                    "2026-01-04",
-                    "2026-01-06",
-                ]
-            ),
-            "commodity": ["beras"] * 5 + ["cabai_merah"] * 5,
-            "price_idr": [100, 101, 102, 103, 104, 200, 198, 205, 210, 212],
-            "price_lag_1d": [None, 100, 101, None, 103, None, 200, 198, 205, None],
-            "price_lag_7d": [None] * 10,
-            "price_lag_30d": [None] * 10,
-            "price_change_1d_pct": [None, 1.0, 0.99, None, 0.97, None, -1.0, 3.53, 2.43, None],
-            "price_change_7d_pct": [None] * 10,
-            "price_change_30d_pct": [None] * 10,
-            "rolling_mean_7d": [100, 100.5, 101, 101.5, 102, 200, 199, 201, 203, 205],
-            "rolling_mean_30d": [100, 100.5, 101, 101.5, 102, 200, 199, 201, 203, 205],
-            "rolling_std_30d": [None, 0.7, 1.0, 1.2, 1.3, None, 1.4, 2.0, 2.2, 2.4],
-            "price_vs_ma30_pct": [0, 0.49, 0.99, 1.48, 1.96, 0, -0.5, 1.99, 3.45, 3.41],
-            "volatility_30d_pct": [None, 0.7, 0.99, 1.18, 1.27, None, 0.7, 0.99, 1.08, 1.17],
-            "target_7d_inflation_pct": [1.5, 1.4, 1.3, None, None, 2.0, 1.9, 1.8, None, None],
-            "target_30d_inflation_pct": [4.5, 4.3, None, None, None, 6.0, 5.9, None, None, None],
-        }
-    )
+    df = _canonical_sample().sort_values(["commodity", "date"]).reset_index(drop=True)
+
+    for col in FEATURE_COLS:
+        df[col] = 1.0
+
+    # introduce sparsity patterns for tier and strict/model distinction
+    df.loc[df["date"] <= pd.Timestamp("2026-01-10"), "price_lag_7d"] = None
+    df.loc[df["date"] <= pd.Timestamp("2026-01-15"), "price_lag_30d"] = None
+    df.loc[df["date"] <= pd.Timestamp("2026-01-05"), "rolling_std_30d"] = None
+    df.loc[df["date"] <= pd.Timestamp("2026-01-20"), "price_change_1d_pct"] = None
+
+    # 7d target cycles through classes; 30d starts later and narrower
+    class_cycle_7d = [2.5, 0.1, -2.5] * 100
+    class_cycle_30d = [1.8, -1.8, 0.0] * 100
+    df["target_7d_inflation_pct"] = class_cycle_7d[: len(df)]
+    df["target_30d_inflation_pct"] = class_cycle_30d[: len(df)]
+    df.loc[df["date"] <= pd.Timestamp("2026-01-20"), "target_30d_inflation_pct"] = None
+
+    return df
 
 
 def test_duplicate_detection_in_canonical_diagnostics():
@@ -76,7 +70,14 @@ def test_duplicate_detection_in_canonical_diagnostics():
 
 
 def test_gap_statistics_include_required_quantiles_and_buckets():
-    gaps = _gap_diagnostics(_canonical_sample())["by_commodity"]
+    canonical = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-06", "2026-01-07"]),
+            "commodity": ["beras"] * 5,
+            "price_idr": [100, 101, 102, 103, 104],
+        }
+    )
+    gaps = _gap_diagnostics(canonical)["by_commodity"]
     beras = next(row for row in gaps if row["commodity"] == "beras")
 
     assert beras["span_days"] == 7
@@ -87,31 +88,61 @@ def test_gap_statistics_include_required_quantiles_and_buckets():
     assert beras["gap_gt_1d_count"] == 1
 
 
-def test_feature_coverage_summary_tracks_non_null_rates_and_first_valid_date():
+def test_feature_tier_and_strict_vs_model_usable_rows_are_reported():
     result = run_dataset_diagnostics(_canonical_sample(), _training_ready_sample())
 
     rows = result.feature_coverage["feature_non_null_rates_by_commodity"]
     beras = next(row for row in rows if row["commodity"] == "beras")
-    assert beras["price_lag_1d_non_null_rate"] == 0.6
-    assert beras["fully_usable_feature_rows"] == 0
-
-    first_valid = result.feature_coverage["feature_first_valid_date_by_commodity"]
-    rec = next(
-        row
-        for row in first_valid
-        if row["commodity"] == "beras" and row["feature"] == "price_lag_1d"
-    )
-    assert rec["first_valid_date"] == "2026-01-02"
+    assert beras["strict_feature_usable_rows"] < beras["model_feature_usable_rows"]
+    assert beras["critical_all_non_null_rate"] <= 1.0
+    assert "CRITICAL" in result.feature_coverage["feature_tiers"]
 
 
-def test_readiness_gate_logic_emits_fail_on_hard_threshold_breach():
+def test_training_window_and_class_balance_are_computed():
+    result = run_dataset_diagnostics(_canonical_sample(), _training_ready_sample())
+
+    windows = result.target_coverage["training_windows"]
+    beras_7d = next(r for r in windows if r["commodity"] == "beras" and r["horizon"] == "7d")
+    assert beras_7d["usable_training_row_count"] > 0
+    assert beras_7d["usable_training_span_days"] > 30
+
+    class_balance_overall_7d = result.class_balance["overall"]["7d"]
+    assert class_balance_overall_7d["class_counts"]["Inflation"] > 0
+    assert class_balance_overall_7d["class_counts"]["Stable"] > 0
+    assert class_balance_overall_7d["class_counts"]["Deflation"] > 0
+
+
+def test_match_quality_summary_contains_exact_tolerance_and_missing():
+    result = run_dataset_diagnostics(_canonical_sample(), _training_ready_sample())
+
+    overall = result.lag_target_match_quality["overall"]
+    lag_7 = next(r for r in overall if r["field"] == "price_lag_7d")
+    assert lag_7["exact_count"] >= 0
+    assert lag_7["tolerance_count"] >= 0
+    assert lag_7["no_match_count"] >= 0
+    assert pytest.approx(lag_7["exact_ratio"] + lag_7["tolerance_ratio"] + lag_7["no_match_ratio"], 1e-6) == 1.0
+
+
+def test_readiness_gate_logic_fails_for_per_commodity_shortfalls_and_class_imbalance():
+    imbalanced = _training_ready_sample()
+    imbalanced.loc[imbalanced["commodity"] == "cabai_merah", "target_7d_inflation_pct"] = 5.0
+    imbalanced.loc[imbalanced["commodity"] == "cabai_merah", "target_30d_inflation_pct"] = 5.0
+
     strict = DiagnosticsConfig(
         thresholds=DiagnosticsThresholds(
-            min_trainable_rows_7d=100,
-            min_trainable_rows_30d=100,
+            min_trainable_rows_7d=50,
+            min_trainable_rows_30d=40,
+            min_trainable_rows_7d_per_commodity=35,
+            min_trainable_rows_30d_per_commodity=30,
+            min_training_span_days_7d_per_commodity=80,
+            min_training_span_days_30d_per_commodity=80,
+            min_class_ratio_warn=0.1,
+            min_class_ratio_fail=0.05,
+            max_tolerance_match_ratio_warn=0.2,
+            max_tolerance_match_ratio_fail=0.6,
         )
     )
-    result = run_dataset_diagnostics(_canonical_sample(), _training_ready_sample(), strict)
+    result = run_dataset_diagnostics(_canonical_sample(), imbalanced, strict)
 
     assert result.readiness_status == ReadinessStatus.FAIL
-    assert any("Insufficient total trainable rows for 7d horizon." in msg for msg in result.failures)
+    assert any("class support too narrow" in msg for msg in result.failures)
