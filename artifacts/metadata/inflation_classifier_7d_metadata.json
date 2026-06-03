@@ -1,0 +1,104 @@
+{
+  "input_contract": "feature_ready_tabular",
+  "model_version": "1.2.0",
+  "training_timestamp_utc": "2026-04-03T04:22:11.376716+00:00",
+  "class_names": [
+    "Deflation",
+    "Inflation",
+    "Stable"
+  ],
+  "stable_band": 1.0,
+  "raw_required_columns": [
+    "date",
+    "commodity",
+    "is_observed_source",
+    "is_month_start",
+    "is_month_end",
+    "year",
+    "month",
+    "week_of_year",
+    "day_of_week",
+    "price_idr",
+    "price_lag_1d",
+    "price_lag_7d",
+    "price_lag_30d",
+    "price_change_1d_pct",
+    "price_change_7d_pct",
+    "price_change_30d_pct",
+    "rolling_mean_7d",
+    "rolling_mean_30d",
+    "rolling_std_30d",
+    "price_vs_ma30_pct",
+    "volatility_30d_pct"
+  ],
+  "engineered_feature_columns": [
+    "commodity",
+    "is_observed_source",
+    "is_month_start",
+    "is_month_end",
+    "year",
+    "price_idr",
+    "price_lag_1d",
+    "price_lag_7d",
+    "price_lag_30d",
+    "price_change_1d_pct",
+    "price_change_7d_pct",
+    "price_change_30d_pct",
+    "rolling_mean_7d",
+    "rolling_mean_30d",
+    "rolling_std_30d",
+    "price_vs_ma30_pct",
+    "volatility_30d_pct",
+    "month_sin",
+    "month_cos",
+    "week_sin",
+    "week_cos",
+    "dow_sin",
+    "dow_cos",
+    "price_zscore_30d",
+    "ma_gap_7_30_pct",
+    "lag_gap_1_7_pct",
+    "lag_gap_7_30_pct",
+    "momentum_gap_7_30_pct",
+    "volatility_x_momentum"
+  ],
+  "target_column": "target_7d_class",
+  "horizon": 7,
+  "training_start_date": "2018-01-31T00:00:00",
+  "training_end_date": "2022-10-21T00:00:00",
+  "model_type": "GradientBoostingClassifier",
+  "artifact_name": "inflation_classifier_7d.joblib",
+  "metrics": {
+    "Deflation": {
+      "precision": 0.5419664268585132,
+      "recall": 0.6807228915662651,
+      "f1-score": 0.6034712950600801,
+      "support": 332.0
+    },
+    "Inflation": {
+      "precision": 0.5618811881188119,
+      "recall": 0.58656330749354,
+      "f1-score": 0.5739570164348925,
+      "support": 387.0
+    },
+    "Stable": {
+      "precision": 0.8620019436345967,
+      "recall": 0.784261715296198,
+      "f1-score": 0.8212962962962963,
+      "support": 1131.0
+    },
+    "accuracy": 0.7243243243243244,
+    "macro avg": {
+      "precision": 0.655283186203974,
+      "recall": 0.6838493047853343,
+      "f1-score": 0.666241535930423,
+      "support": 1850.0
+    },
+    "weighted avg": {
+      "precision": 0.7417865252809381,
+      "recall": 0.7243243243243244,
+      "f1-score": 0.7304648359088438,
+      "support": 1850.0
+    }
+  }
+}
