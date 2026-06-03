@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.common.config import PROJECT_ROOT
 from src.inference.predict import InferenceService
 
-PAGE_TITLE = "Mercatorie Price Intelligence"
+PAGE_TITLE = "Mercatorie Price Intelligence for Tani Padu"
 CLASS_ORDER = ["Deflation", "Stable", "Inflation"]
 CLASS_COLORS = {
     "Deflation": "#2f80ed",
