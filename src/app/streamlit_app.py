@@ -482,7 +482,7 @@ def model_quality_chart(metadata: dict[str, Any]) -> None:
 
 
 def render_header(horizon: int, metadata: dict[str, Any]) -> None:
-    st.title("Mercatorie Price Intelligence")
+    st.title("Tani Padu: Mercatorie Price Intelligence")
     st.caption("Forecast likely food-price movement from recent market prices, momentum, and volatility.")
 
     c1, c2, c3, c4 = st.columns(4)
